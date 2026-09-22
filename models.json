@@ -1,0 +1,33 @@
+{
+  "_comment": "Downloadable GGUF models. Shown in the app's download dropdown. 'filename' is the name saved into the Model folder.",
+  "models": [
+    {
+      "name": "Qwen3 0.6B (Q8_0) — tiny, fastest",
+      "filename": "Qwen3-0.6B-Q8_0.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf",
+      "size": "~0.6 GB",
+      "description": "Smallest Qwen3. Runs on almost any CPU. Good for quick tests."
+    },
+    {
+      "name": "Qwen3 4B (Q4_K_M) — balanced",
+      "filename": "Qwen3-4B-Q4_K_M.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
+      "size": "~2.5 GB",
+      "description": "Good balance of quality and speed for chat, code and electronics Q&A."
+    },
+    {
+      "name": "Gemma 3 4B IT (Q4_K_M) — Google",
+      "filename": "gemma-3-4b-it-Q4_K_M.gguf",
+      "url": "https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf",
+      "size": "~2.5 GB",
+      "description": "Google Gemma 3 4B instruction-tuned. Strong general assistant."
+    },
+    {
+      "name": "Qwen3 8B (Q4_K_M) — smarter, heavier",
+      "filename": "Qwen3-8B-Q4_K_M.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf",
+      "size": "~5.0 GB",
+      "description": "Noticeably smarter than 4B. Needs ~8 GB RAM and more patience on CPU."
+    }
+  ]
+}

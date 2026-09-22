@@ -1,0 +1,14 @@
+# ElectroMind - Python dependencies
+# Install with:  pip install -r requirements.txt
+
+# Chat GUI
+PyQt6>=6.6
+
+# RAG: vector store + embeddings (chromadb pulls onnxruntime itself,
+# but we pin it explicitly because it must load BEFORE Qt - see gui.py)
+chromadb>=0.5
+onnxruntime>=1.17
+
+# Document text extraction (PDF schematics/datasheets, DOCX docs)
+pypdf>=4.0
+python-docx>=1.1

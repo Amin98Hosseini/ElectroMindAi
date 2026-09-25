@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ElectroMind AI — Your Local AI Copilot for Electronics &amp; Embedded Projects</title>
+  <meta name="description" content="ElectroMind AI is a fully local, offline AI copilot for electronics and embedded projects. It reads your schematics, firmware and datasheets with RAG — no cloud, no API keys, no telemetry.">
+  <meta property="og:title" content="ElectroMind AI — Local AI Copilot for Electronics">
+  <meta property="og:description" content="Chat with a local AI that has read your schematics, firmware and datasheets. No cloud. No API keys. No telemetry.">
+  <meta property="og:image" content="assets/icon.png">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <script>document.documentElement.classList.add('js');</script>
+
+  <!-- ======================= NAV ======================= -->
+  <header class="nav" id="top">
+    <div class="nav__inner">
+      <a class="nav__brand" href="#top">
+        <img src="assets/icon.png" alt="ElectroMind AI logo" class="nav__logo">
+        <span>ElectroMind&nbsp;AI</span>
+      </a>
+      <nav class="nav__links" id="navLinks">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#quickstart">Getting started</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="btn btn--ghost nav__cta" href="https://github.com/ahurartos/ElectroMind" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+      <button class="nav__burger" id="navBurger" aria-label="Toggle menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ======================= HERO ======================= -->
+  <section class="hero">
+    <div class="hero__circuit" aria-hidden="true">
+      <div class="circuit-line circuit-line--1"></div>
+      <div class="circuit-line circuit-line--2"></div>
+      <div class="circuit-line circuit-line--3"></div>
+    </div>
+    <p class="hero__eyebrow">100% Local &nbsp;·&nbsp; RAG &nbsp;·&nbsp; GGUF via llama.cpp &nbsp;·&nbsp; Python 3.10+</p>
+    <h1>The Local Mind<br>for Your Circuits</h1>
+    <p class="hero__sub">
+      ElectroMind AI bundles a llama.cpp inference server, a PyQt6 chat GUI and a
+      retrieval-augmented engine that indexes <em>your</em> project — firmware, schematic PDFs,
+      datasheets and docs — so every answer is grounded in <em>your</em> files, with citations.
+    </p>
+    <p class="hero__privacy">🔒&nbsp; No cloud. No API keys. No telemetry. Your code and chats never leave your machine.</p>
+    <div class="hero__actions">
+      <a class="btn btn--solid" href="#quickstart">Start in three steps</a>
+      <a class="btn btn--ghost" href="#how">See how it works</a>
+    </div>
+    <p class="hero__meta">Windows x64 &nbsp;·&nbsp; Qwen3, Gemma 3 or any&nbsp;<code>.gguf</code> &nbsp;·&nbsp; GPU optional</p>
+  </section>
+
+  <!-- ======================= STATS ======================= -->
+  <section class="stats" id="stats">
+    <div class="stats__grid">
+      <div class="stat reveal">
+        <div class="stat__value">3<span class="stat__unit">&nbsp;steps</span></div>
+        <div class="stat__label">install, drop a model, run — no accounts, no cloud setup</div>
+      </div>
+      <div class="stat reveal">
+        <div class="stat__value">0<span class="stat__unit">&nbsp;bytes</span></div>
+        <div class="stat__label">of your code, schematics or chats ever sent to any server</div>
+      </div>
+      <div class="stat reveal">
+        <div class="stat__value">2<span class="stat__unit">&nbsp;modes</span></div>
+        <div class="stat__label">⚡ Fast hash embeddings — instant &amp; offline; 🎯 Accurate MiniLM — semantic</div>
+      </div>
+      <div class="stat reveal">
+        <div class="stat__value">∞<span class="stat__unit">&nbsp;chats</span></div>
+        <div class="stat__label">named, auto-titled and saved per project; long chats trimmed, never lost</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= FEATURES ======================= -->
+  <section class="section" id="features">
+    <div class="section__head reveal">
+      <h2>What you get</h2>
+      <p>One desktop app that keeps the model, the knowledge and the conversation on your side of the network.</p>
+    </div>
+
+    <div class="feature-blocks">
+      <div class="feature-block reveal">
+        <div class="feature-block__text">
+          <span class="tag">Chat</span>
+          <h3>Streaming chat with a thinking bubble</h3>
+          <p>Answers stream into chat bubbles; reasoning models like Qwen3 get a separate
+             <em>thinking</em> bubble so you can watch the reasoning. Multiple named chats per project,
+             auto-titled from your first question and clickable to reopen — full history stays on disk
+             even when long chats are trimmed before sending.</p>
+          <ul class="ticks">
+            <li>Editable system prompt, pre-tuned for electronics expertise</li>
+            <li>Context-window memory management for very long conversations</li>
+          </ul>
+        </div>
+        <div class="feature-block__code">
+          <div class="code-card">
+            <div class="code-card__bar"><i></i><i></i><i></i><span>chat · ElectroMind</span></div>
+            <pre><code><span class="c">// you ask</span>
+Why does my buck converter ring at SW node?
+
+<span class="c">// ElectroMind answers, citing your files:</span>
+<span class="c">┃ hardware/power/buck.pdf · hw/stm32f103.c</span>
+The ring is snubber resonance. Add RC across the
+low-side FET: 4.7Ω + 1nF, keep traces &lt; 10 mm…
+<span class="k">[thinking]</span> Switch-node ringing → parasitic L·C…</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="feature-block feature-block--flip reveal">
+        <div class="feature-block__text">
+          <span class="tag">Models</span>
+          <h3>Local GGUF models, one click away</h3>
+          <p>Pick a model from the <code>./Model</code> folder, or download one straight from the built-in
+             catalog with a live progress bar — Qwen3, Gemma 3, or any <code>.gguf</code> you place there
+             yourself.</p>
+          <ul class="ticks">
+            <li>Server settings: port, context size, GPU layers, temperature, max tokens</li>
+            <li>One-click start/stop with health checks; orphaned servers cleaned up automatically</li>
+          </ul>
+        </div>
+        <div class="feature-block__code">
+          <div class="code-card">
+            <div class="code-card__bar"><i></i><i></i><i></i><span>Models panel</span></div>
+            <pre><code>Qwen3 4B (Q4_K_M)      ~2.5 GB   ● Ready
+Gemma 3 4B IT          ~2.5 GB   ○
+Qwen3 8B (Q4_K_M)      ~5.0 GB   ○
+
+context  8192   gpu layers  0
+temp     0.7    max tokens  -1
+<span class="k">▶ Start server</span>   <span class="c">■ Stop</span></code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="feature-block reveal">
+        <div class="feature-block__text">
+          <span class="tag">Project Knowledge · RAG</span>
+          <h3>It has actually read your files</h3>
+          <p>Point ElectroMind at your project folder and hit <strong>Analyze</strong>. It indexes source
+             code, configs, docs, <strong>PDF</strong> (layout mode tuned for CAD/schematic exports) and
+             <strong>DOCX</strong> — then answers cite the exact files it used.</p>
+          <ul class="ticks">
+            <li>Incremental indexing — only new/changed files are re-processed</li>
+            <li>Fast mode needs zero downloads; Accurate mode uses MiniLM embeddings</li>
+          </ul>
+        </div>
+        <div class="feature-block__code">
+          <div class="code-card">
+            <div class="code-card__bar"><i></i><i></i><i></i><span>indexing · my-project/</span></div>
+            <pre><code>🔍 Analyze…
+<span class="ok">✔</span> 38 files scanned
+<span class="ok">✔</span> 6 PDFs extracted (layout mode)
+<span class="ok">✔</span> 214 chunks embedded → chroma_db/
+<span class="ok">✔</span> done in 3.2 s <span class="c">(incremental: 0 changed)</span></code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= HOW IT WORKS ======================= -->
+  <section class="section section--alt" id="how">
+    <div class="section__head reveal">
+      <h2>How it works</h2>
+      <p>Four stages, from your file system to a cited answer. Everything runs as local processes on your PC.</p>
+    </div>
+
+    <div class="pipeline">
+      <div class="pipe reveal">
+        <div class="pipe__num">01</div>
+        <h3>Scan</h3>
+        <p>Walks your project folder and skips noise — <code>.git</code>, <code>build</code>,
+           <code>node_modules</code>… Files over 5&nbsp;MB are reported and skipped.</p>
+      </div>
+      <div class="pipe reveal">
+        <div class="pipe__num">02</div>
+        <h3>Load &amp; chunk</h3>
+        <p>Extracts text — PDF via <code>pypdf</code> layout mode with CAD-export cleanup, DOCX including
+           tables — then splits into ~1500-char overlapping chunks.</p>
+      </div>
+      <div class="pipe reveal">
+        <div class="pipe__num">03</div>
+        <h3>Embed &amp; store</h3>
+        <p>Chunks go into ChromaDB with their relative path as metadata, using fast hash vectors or
+           MiniLM embeddings — both local.</p>
+      </div>
+      <div class="pipe reveal">
+        <div class="pipe__num">04</div>
+        <h3>Retrieve &amp; answer</h3>
+        <p>Each question pulls the top-4 most similar chunks into the prompt as project context; the answer
+           appears with its source files underneath.</p>
+      </div>
+    </div>
+
+    <div class="section__head section__head--sub reveal">
+      <h3 class="h3-like">Built in three clean layers</h3>
+    </div>
+    <div class="arch">
+      <div class="arch__item reveal">
+        <h4><code>ui/</code></h4>
+        <p>PyQt6 dark-themed desktop GUI: chat, models, RAG and settings, with background worker threads
+           so the interface never freezes.</p>
+      </div>
+      <div class="arch__item reveal">
+        <h4><code>core/</code></h4>
+        <p>GUI-independent logic: llama-server process control, proxy-safe localhost HTTP, per-project chat
+           persistence and the model catalog.</p>
+      </div>
+      <div class="arch__item reveal">
+        <h4><code>rag/</code></h4>
+        <p>The retrieval pipeline: file discovery, text/PDF/DOCX extraction, chunking, embeddings and the
+           ChromaDB store.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= GETTING STARTED ======================= -->
+  <section class="section" id="quickstart">
+    <div class="section__head reveal">
+      <h2>Getting started</h2>
+      <p>Python 3.10+ on Windows x64. Three steps and you're chatting with your own hardware docs.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step__head">
+          <span class="step__num">1</span>
+          <h3>Install dependencies</h3>
+        </div>
+        <p>One pip command pulls PyQt6, ChromaDB and the document extractors:</p>
+        <div class="code-card code-card--cmd">
+          <button class="copy-btn" aria-label="Copy command">Copy</button>
+          <pre><code>pip install -r requirements.txt</code></pre>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <div class="step__head">
+          <span class="step__num">2</span>
+          <h3>Get a model</h3>
+        </div>
+        <p>Drop any <code>.gguf</code> into <code>./Model</code> — or download one from inside the app's
+           catalog. <strong>Qwen3 4B (Q4_K_M)</strong> (~2.5&nbsp;GB) is the recommended start: good CPU
+           speed/quality balance. Have a GPU-enabled llama.cpp build? Set GPU layers &gt;&nbsp;0.</p>
+        <div class="code-card code-card--cmd">
+          <button class="copy-btn" aria-label="Copy command">Copy</button>
+          <pre><code>python gui.py        <span class="c"># or: python run_llama.py (terminal-only chat)</span></code></pre>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <div class="step__head">
+          <span class="step__num">3</span>
+          <h3>Connect your project &amp; ask</h3>
+        </div>
+        <ol class="ol-steps">
+          <li>Select a model → <strong>▶ Start server</strong> → wait for <span class="ok">●&nbsp;Ready</span></li>
+          <li><strong>📂 Open</strong> your project folder → <strong>🔍 Analyze</strong> to index it</li>
+          <li>Ask questions — answers arrive grounded in your files, with citations</li>
+        </ol>
+      </div>
+    </div>
+
+    <p class="fineprint reveal">Every answer still needs engineering judgement: the model is text-only (no vision),
+       and critical values — mains voltage, Li-ion/LiPo handling, ESD, current limits — must always be verified
+       against the datasheet. The built-in system prompt enforces safety-aware answers, but you are the engineer.</p>
+  </section>
+
+  <!-- ======================= FAQ ======================= -->
+  <section class="section section--alt" id="faq">
+    <div class="section__head reveal">
+      <h2>FAQ</h2>
+      <p>The questions that actually come up.</p>
+    </div>
+    <div class="faq-list">
+      <details class="faq reveal">
+        <summary>Does anything I write get sent to the internet?<span class="faq__chev">⌄</span></summary>
+        <p>No. Everything runs locally — the llama.cpp server, the embeddings, the vector store. Only
+           <em>model downloads</em> (the GGUF file and, optionally, the MiniLM embedding model) touch the
+           internet. Localhost requests even bypass the Windows system proxy.</p>
+      </details>
+      <details class="faq reveal">
+        <summary>Can it read my Altium/KiCad schematic files?<span class="faq__chev">⌄</span></summary>
+        <p>Native CAD binaries (like <code>.SchDoc</code>) have no text layer, so they're skipped — export
+           them as PDF and re-Analyze. The PDF loader is tuned for CAD/schematic exports and reads the text
+           layout, not images. Scanned-image PDFs likewise contain no text to read.</p>
+      </details>
+      <details class="faq reveal">
+        <summary>The app closes instantly after Analyze — why?<span class="faq__chev">⌄</span></summary>
+        <p>A known Windows DLL conflict (onnxruntime vs Qt) that is fixed by design: <code>gui.py</code>
+           imports <code>onnxruntime</code> before Qt. If you ever see it again, delete
+           <code>chroma_db\ef_name.txt</code> and restart.</p>
+      </details>
+      <details class="faq reveal">
+        <summary>Port 8081 is already in use — what now?<span class="faq__chev">⌄</span></summary>
+        <p>Pick another port in the settings, or stop the other server. The app also cleans up leftover
+           <code>llama-server.exe</code> processes on start.</p>
+      </details>
+      <details class="faq reveal">
+        <summary>Which model should I start with?<span class="faq__chev">⌄</span></summary>
+        <p><strong>Qwen3 4B (Q4_K_M)</strong> — about 2.5&nbsp;GB, a good balance of quality and speed on CPU
+           for chat, code and electronics Q&amp;A. Need it smarter? Qwen3 8B needs ~8&nbsp;GB RAM and more
+           patience. Just testing? Qwen3 0.6B runs on almost anything.</p>
+      </details>
+      <details class="faq reveal">
+        <summary>Can it view images or photos of my board?<span class="faq__chev">⌄</span></summary>
+        <p>No — local GGUF text models have no vision. Describe the image in your question, or export the
+           schematic as a text-based PDF and let RAG read it.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- ======================= FOOTER ======================= -->
+  <footer class="footer">
+    <div class="footer__inner">
+      <div class="footer__brand">
+        <img src="assets/icon.png" alt="ElectroMind AI logo" class="footer__logo">
+        <div>
+          <strong>ElectroMind AI</strong>
+          <p>Your fully local AI copilot for electronics &amp; embedded projects.</p>
+        </div>
+      </div>
+      <div class="footer__cols">
+        <div class="footer__col">
+          <h5>Explore</h5>
+          <a href="#features">Features</a>
+          <a href="#how">How it works</a>
+          <a href="#quickstart">Getting started</a>
+          <a href="#faq">FAQ</a>
+        </div>
+        <div class="footer__col">
+          <h5>Privacy</h5>
+          <p>Everything runs on your machine. Only model downloads touch the internet — and even those are
+             files you choose.</p>
+        </div>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span>© 2026 ElectroMind AI</span>
+      <span>Developed by <strong>Mohammad Amin Khadel Al Hosseini</strong> · with AI pair-programming assistance</span>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

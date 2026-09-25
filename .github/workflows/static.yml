@@ -34,7 +34,7 @@ jobs:
       - name: Upload Website
         uses: actions/upload-pages-artifact@v4
         with:
-          path: "./website"
+          path: "./web"
 
       - name: Deploy to GitHub Pages
         id: deployment

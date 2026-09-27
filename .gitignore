@@ -1,0 +1,23 @@
+# ---------- Models (never commit .gguf files) ----------
+Model/
+*.gguf
+
+# ---------- Runtime artifacts (created at run time) ----------
+chroma_db/
+chats/
+llama_server.log
+
+# ---------- Local user settings ----------
+settings.json
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---------- OS / editor ----------
+.freebuff/
+Thumbs.db
+.DS_Store

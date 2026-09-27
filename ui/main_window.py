@@ -10,18 +10,18 @@ from PyQt6.QtGui import QTextCursor
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QListWidget, QListWidgetItem, QTextBrowser, QLineEdit, QPushButton,
-    QLabel, QSpinBox, QDoubleSpinBox, QSplitter, QGroupBox, QFormLayout,
-    QMessageBox, QPlainTextEdit, QCheckBox, QProgressBar, QFileDialog,
-    QComboBox,
+    QLabel, QSplitter, QGroupBox, QMessageBox, QPlainTextEdit,
+    QProgressBar, QFileDialog,
 )
 
 import rag
 from core import chat_store
+from core import skills as skill_lib
 from core.catalog import load_catalog
 from core.config import LOG_PATH, MODEL_DIR, SETTINGS_PATH, BASE_DIR
 from core.llama import start_server_process, stop_process, kill_all_servers, server_healthy
 from core.http_utils import port_open
-from core.prompts import DEFAULT_SYSTEM_PROMPT
+from ui.settings_dialog import SettingsDialog
 from ui.theme import DARK, BUBBLE_USER, BUBBLE_AI, BUBBLE_THINK, bubble
 from ui.workers import ServerStarter, IndexWorker, DownloadWorker, ChatWorker
 
@@ -54,6 +54,8 @@ class MainWindow(QMainWindow):
         self._current_chat_id = None  # chat id currently shown in the chat view
         self._chat_dirty = False       # unsaved user/assistant messages
         self._suppress_chat_select = False
+        self._loading = False          # True while settings.json is being restored
+        self._server_ctx = None        # context the running server was started with
 
         self._build_ui()
         self._refresh_models()
@@ -72,137 +74,78 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         root.addWidget(splitter)
 
-        # ---- left panel
+        # ---- settings window: owns every configurable widget
+        self.dlg = SettingsDialog(self)
+        self.port_spin = self.dlg.port_spin
+        self.ctx_spin = self.dlg.ctx_spin
+        self.ngl_spin = self.dlg.ngl_spin
+        self.temp_spin = self.dlg.temp_spin
+        self.maxtok_spin = self.dlg.maxtok_spin
+        self.dl_combo = self.dlg.dl_combo
+        self.dl_btn = self.dlg.dl_btn
+        self.dl_progress = self.dlg.dl_progress
+        self.dl_status = self.dlg.dl_status
+        self.rag_mode = self.dlg.rag_mode
+        self.rag_enabled = self.dlg.rag_enabled
+        self.rag_topk = self.dlg.rag_topk
+        self.sys_prompt_edit = self.dlg.sys_prompt_edit
+
+        # ---- left panel: model, server, project, settings button
         left = QWidget()
         left.setFixedWidth(320)
         lv = QVBoxLayout(left)
-        lv.setContentsMargins(4, 4, 4, 4)
+        lv.setContentsMargins(6, 6, 6, 6)
+        lv.setSpacing(8)
 
-        lv.addWidget(QLabel("<b>🤖 Models (./Model)</b>"))
+        lv.addWidget(QLabel("<b>🤖 Model (./Model)</b>"))
         self.model_list = QListWidget()
+        self.model_list.setMinimumHeight(150)
         lv.addWidget(self.model_list, 1)
-        btn_row = QHBoxLayout()
-        self.refresh_btn = QPushButton("⟳")
-        self.refresh_btn.setFixedWidth(40)
+        self.refresh_btn = QPushButton("⟳ Refresh")
         self.refresh_btn.setObjectName("ghost")
         self.refresh_btn.clicked.connect(self._refresh_models)
-        btn_row.addWidget(self.refresh_btn)
-        btn_row.addStretch()
-        lv.addLayout(btn_row)
+        lv.addWidget(self.refresh_btn)
 
-        lv.addWidget(QLabel("<b>⬇ Download model</b>"))
-        dl_row = QHBoxLayout()
-        self.dl_combo = QComboBox()
-        self.dl_combo.setToolTip("Pick a model to download into ./Model")
-        dl_row.addWidget(self.dl_combo, 1)
-        self.dl_btn = QPushButton("Download")
-        self.dl_btn.clicked.connect(self._download_model)
-        dl_row.addWidget(self.dl_btn)
-        lv.addLayout(dl_row)
-        self.dl_progress = QProgressBar()
-        self.dl_progress.setValue(0)
-        lv.addWidget(self.dl_progress)
-        self.dl_status = QLabel("")
-        self.dl_status.setObjectName("dim")
-        self.dl_status.setWordWrap(True)
-        lv.addWidget(self.dl_status)
-
-        settings = QGroupBox("Server settings")
-        form = QFormLayout(settings)
-        self.port_spin = QSpinBox()
-        self.port_spin.setRange(1, 65535)
-        self.port_spin.setValue(8081)
-        self.ctx_spin = QSpinBox()
-        self.ctx_spin.setRange(512, 131072)
-        self.ctx_spin.setValue(4096)
-        self.ngl_spin = QSpinBox()
-        self.ngl_spin.setRange(0, 99)
-        self.ngl_spin.setValue(0)
-        self.temp_spin = QDoubleSpinBox()
-        self.temp_spin.setRange(0.0, 2.0)
-        self.temp_spin.setSingleStep(0.1)
-        self.temp_spin.setValue(0.7)
-        self.maxtok_spin = QSpinBox()
-        self.maxtok_spin.setRange(-1, 131072)
-        self.maxtok_spin.setValue(-1)
-        self.maxtok_spin.setSpecialValueText("inf")
-        form.addRow("Port", self.port_spin)
-        form.addRow("Context", self.ctx_spin)
-        form.addRow("GPU layers", self.ngl_spin)
-        form.addRow("Temperature", self.temp_spin)
-        form.addRow("Max tokens", self.maxtok_spin)
-        lv.addWidget(settings)
-
+        lv.addWidget(QLabel("<b>🖥 Server</b>"))
         self.status_label = QLabel("● Stopped")
         self.status_label.setStyleSheet("color:#888; font-weight:bold;")
         lv.addWidget(self.status_label)
-
         self.start_btn = QPushButton("▶ Start server")
         self.start_btn.clicked.connect(self._toggle_server)
         lv.addWidget(self.start_btn)
 
-        rag_box = QGroupBox("📁 Project knowledge (RAG)")
-        rag_layout = QVBoxLayout(rag_box)
+        proj_box = QGroupBox("📁 Project")
+        pl = QVBoxLayout(proj_box)
         self.proj_label = QLabel("No folder selected")
         self.proj_label.setObjectName("dim")
         self.proj_label.setWordWrap(True)
-        rag_layout.addWidget(self.proj_label)
-        rag_btns = QHBoxLayout()
-        self.open_dir_btn = QPushButton("📂 Open")
+        pl.addWidget(self.proj_label)
+        proj_btns = QHBoxLayout()
+        self.open_dir_btn = QPushButton("📂 Browse")
         self.open_dir_btn.setObjectName("ghost")
         self.open_dir_btn.clicked.connect(self._open_project_dir)
         self.analyze_btn = QPushButton("🔍 Analyze")
         self.analyze_btn.clicked.connect(self._analyze_project)
-        rag_btns.addWidget(self.open_dir_btn)
-        rag_btns.addWidget(self.analyze_btn)
-        rag_layout.addLayout(rag_btns)
-        mode_row = QHBoxLayout()
-        mode_row.addWidget(QLabel("Embeddings:"))
-        self.rag_mode = QComboBox()
-        self.rag_mode.addItems(["⚡ Fast (seconds)", "🎯 Accurate (slow)"])
-        self.rag_mode.setToolTip("Fast = instant keyword-style vectors.\nAccurate = MiniLM download + slow CPU encoding, better meaning match.")
-        mode_row.addWidget(self.rag_mode, 1)
-        rag_layout.addLayout(mode_row)
+        proj_btns.addWidget(self.open_dir_btn, 1)
+        proj_btns.addWidget(self.analyze_btn, 1)
+        pl.addLayout(proj_btns)
         self.rag_progress = QProgressBar()
         self.rag_progress.setValue(0)
-        rag_layout.addWidget(self.rag_progress)
+        pl.addWidget(self.rag_progress)
         self.rag_status = QLabel("")
         self.rag_status.setObjectName("dim")
         self.rag_status.setWordWrap(True)
-        rag_layout.addWidget(self.rag_status)
-        rag_opts = QHBoxLayout()
-        self.rag_enabled = QCheckBox("Use in chat")
-        self.rag_enabled.setChecked(True)
-        self.rag_topk = QSpinBox()
-        self.rag_topk.setRange(1, 10)
-        self.rag_topk.setValue(4)
-        self.rag_topk.setPrefix("top-")
-        rag_opts.addWidget(self.rag_enabled)
-        rag_opts.addWidget(self.rag_topk)
-        rag_clear_btn = QPushButton("Clear index")
-        rag_clear_btn.setObjectName("ghost")
-        rag_clear_btn.clicked.connect(self._clear_rag_index)
-        rag_opts.addWidget(rag_clear_btn)
-        rag_layout.addLayout(rag_opts)
-        lv.addWidget(rag_box)
+        pl.addWidget(self.rag_status)
+        lv.addWidget(proj_box)
 
-        sys_box = QGroupBox("⚙️ System prompt")
-        sys_layout = QVBoxLayout(sys_box)
-        self.sys_prompt_edit = QPlainTextEdit()
-        self.sys_prompt_edit.setPlainText(DEFAULT_SYSTEM_PROMPT)
-        self.sys_prompt_edit.setFixedHeight(90)
-        self.sys_prompt_edit.setPlaceholderText("Define how the model should behave...")
-        self.sys_prompt_edit.textChanged.connect(self._save_settings)
-        sys_layout.addWidget(self.sys_prompt_edit)
-        sys_btns = QHBoxLayout()
-        self.sys_reset_btn = QPushButton("Reset default")
-        self.sys_reset_btn.setObjectName("ghost")
-        self.sys_reset_btn.clicked.connect(
-            lambda: self.sys_prompt_edit.setPlainText(DEFAULT_SYSTEM_PROMPT))
-        sys_btns.addStretch()
-        sys_btns.addWidget(self.sys_reset_btn)
-        sys_layout.addLayout(sys_btns)
-        lv.addWidget(sys_box)
+        lv.addStretch()
+        self.skills_label = QLabel("Skills: none")
+        self.skills_label.setObjectName("dim")
+        self.skills_label.setWordWrap(True)
+        lv.addWidget(self.skills_label)
+        self.settings_btn = QPushButton("⚙ Settings")
+        self.settings_btn.clicked.connect(self._open_settings)
+        lv.addWidget(self.settings_btn)
 
         splitter.addWidget(left)
 
@@ -283,7 +226,20 @@ class MainWindow(QMainWindow):
         splitter.addWidget(right)
         splitter.setStretchFactor(1, 1)
         self.setStyleSheet(DARK)
+        self._update_skills_indicator()
         self._update_send_state()
+
+    # ---------------------------------------------------------- skills
+    def _selected_skills(self):
+        return self.dlg.selected_skills()
+
+    def _update_skills_indicator(self):
+        """Left-panel line showing the skills that are active right now."""
+        if getattr(self, "skills_label", None) is None or getattr(self, "dlg", None) is None:
+            return  # built in this order: dialog/label may not exist yet
+        names = [s["name"] for s in skill_lib.all_skills()
+                 if s["id"] in self._selected_skills()]
+        self.skills_label.setText("Skills: " + (", ".join(names) if names else "none"))
 
     # ---------------------------------------------------------- models
     def _refresh_models(self):
@@ -380,8 +336,21 @@ class MainWindow(QMainWindow):
 
     # ---------------------------------------------------------- RAG
     def _load_settings(self):
+        self._loading = True
         try:
             data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+            sp = data.get("system_prompt")
+            if sp:
+                self.sys_prompt_edit.setPlainText(sp)
+            self.port_spin.setValue(int(data.get("port", 8081)))
+            self.ctx_spin.setValue(int(data.get("ctx", 4096)))
+            self.ngl_spin.setValue(int(data.get("ngl", 0)))
+            self.temp_spin.setValue(float(data.get("temp", 0.7)))
+            self.maxtok_spin.setValue(int(data.get("max_tokens", -1)))
+            self.rag_mode.setCurrentIndex(int(data.get("rag_mode", 0)))
+            self.rag_topk.setValue(int(data.get("rag_topk", 4)))
+            self.rag_enabled.setChecked(bool(data.get("rag_enabled", True)))
+            self.dlg.set_skills(list(data.get("skills", [])))
             d = data.get("project_dir")
             if d and Path(d).is_dir():
                 self.project_dir = d
@@ -389,20 +358,110 @@ class MainWindow(QMainWindow):
                 self._show_index_availability(auto=False)
                 self._refresh_chat_list()
                 self._load_last_chat()
-            sp = data.get("system_prompt")
-            if sp:
-                self.sys_prompt_edit.setPlainText(sp)
+        except Exception:
+            pass
+        finally:
+            self._loading = False
+        self._auto_context()  # make room for the restored skills / RAG / prompt
+
+    def _save_settings(self, *_):
+        if getattr(self, "_loading", False):
+            return
+        try:
+            data = {
+                "project_dir": self.project_dir,
+                "system_prompt": self.sys_prompt_edit.toPlainText(),
+                "port": self.port_spin.value(),
+                "ctx": self.ctx_spin.value(),
+                "ngl": self.ngl_spin.value(),
+                "temp": self.temp_spin.value(),
+                "max_tokens": self.maxtok_spin.value(),
+                "rag_mode": self.rag_mode.currentIndex(),
+                "rag_topk": self.rag_topk.value(),
+                "rag_enabled": self.rag_enabled.isChecked(),
+                "skills": self.dlg.selected_skills(),
+            }
+            SETTINGS_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                                     encoding="utf-8")
         except Exception:
             pass
 
-    def _save_settings(self):
-        try:
-            SETTINGS_PATH.write_text(
-                json.dumps({"project_dir": self.project_dir,
-                            "system_prompt": self.sys_prompt_edit.toPlainText()}),
-                encoding="utf-8")
-        except Exception:
-            pass
+    # ---------------------------------------------------------- context size
+    # One answer must fit into the model context:
+    #   system prompt + skills + RAG block + chat room + reply.
+    CHAT_ROOM = 2048       # tokens kept free for the conversation itself
+    REPLY_DEFAULT = 1024   # when Max tokens = "inf"
+    MIN_CTX = 4096
+    MAX_CTX = 32768        # auto-sizing ceiling (safe for every bundled model)
+    CTX_STEP = 512         # context is rounded up to this granularity
+
+    def _reply_budget(self):
+        value = self.maxtok_spin.value()
+        return value if value > 0 else self.REPLY_DEFAULT
+
+    def _context_need(self):
+        """Estimated tokens needed: prompt + skills + RAG + chat room + reply."""
+        chars = len(self.sys_prompt_edit.toPlainText().strip())
+        chars += len(skill_lib.build_prompt(self.dlg.selected_skills()))
+        if self.rag_enabled.isChecked():
+            try:
+                chunks = rag.index_stats().get("chunks", 0)
+            except Exception:
+                chunks = 0
+            if chunks:  # rag.build_context() is capped at 6000 chars
+                chars += min(6000, self.rag_topk.value() * 1500)
+        tokens = int(chars / 4 * 1.15) + 8   # ~4 characters per token + margin
+        return tokens + self.CHAT_ROOM + self._reply_budget()
+
+    def _effective_ctx(self):
+        """Context usable right now: the one the running server was started with."""
+        return self._server_ctx if self._server_ctx else self.ctx_spin.value()
+
+    def _auto_context(self):
+        """Raise/lower the Context setting so the selected skills always fit."""
+        need = max(self._context_need(), self.MIN_CTX)
+        target = -(-need // self.CTX_STEP) * self.CTX_STEP   # round up
+        target = max(self.MIN_CTX, min(target, self.MAX_CTX))
+        if target != self.ctx_spin.value():
+            self.ctx_spin.setValue(target)   # valueChanged -> saves settings.json
+            if self._server_ctx is not None and self._server_ctx != target:
+                self._append_sys(
+                    f"⚙️ Context sized to {target} tokens for the selected skills — "
+                    "restart the server (■ Stop → ▶ Start) to apply it.")
+        return target
+
+    @staticmethod
+    def _fit_system(skills_block, system_prompt, rag_block, budget_chars):
+        """Trim project context first, then skills, then the prompt, so the system
+        message always fits the running context (never sends a too-long request).
+
+        Returns (text, [names of the trimmed parts]).
+        """
+        if budget_chars <= 0:
+            return "", ["system prompt"]
+        prompt = system_prompt[:budget_chars]
+        room = budget_chars - len(prompt)
+        skills = skills_block[:room]
+        room -= len(skills)
+        rag = rag_block[:room]
+        trimmed = []
+        if len(prompt) < len(system_prompt):
+            trimmed.append("system prompt")
+        if len(skills) < len(skills_block):
+            trimmed.append("skills")
+        if len(rag) < len(rag_block):
+            trimmed.append("project context")
+        parts = [p.strip("\n") for p in (skills, prompt, rag) if p.strip()]
+        text = "\n\n".join(parts)
+        if len(text) > budget_chars:      # join() separators also count
+            text = text[:budget_chars]
+        return text, trimmed
+
+    def _open_settings(self):
+        self._refresh_rag_stats()
+        self.dlg.show()
+        self.dlg.raise_()
+        self.dlg.activateWindow()
 
     def _show_index_availability(self, auto=True):
         """Check saved index for the current dir: reuse if fresh, else update incrementally."""
@@ -542,7 +601,9 @@ class MainWindow(QMainWindow):
             base = f"Index: {st['files']} files, {st['chunks']} chunks."
         except Exception:
             base = "Index: unavailable."
-        self.rag_status.setText(f"{base} {extra}".strip())
+        text = f"{base} {extra}".strip()
+        self.rag_status.setText(text)
+        self.dlg.index_stats.setText(text)
 
     # ---------------------------------------------------------- chats
     @staticmethod
@@ -787,6 +848,7 @@ class MainWindow(QMainWindow):
         if not model:
             QMessageBox.warning(self, "No model", "Select a .gguf model first.")
             return
+        self._auto_context()   # never start with less context than the prompt needs
         port = self.port_spin.value()
         if port_open(port):
             QMessageBox.warning(self, "Port busy", f"Port {port} is already in use.")
@@ -802,6 +864,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Log error", str(e))
             return
         self._log_pos = 0
+        self._server_ctx = self.ctx_spin.value()
         self.log_view.clear()
         self._set_status("starting", "● Starting...")
         self.start_btn.setEnabled(False)
@@ -813,7 +876,8 @@ class MainWindow(QMainWindow):
 
     def _on_server_ready(self):
         self._drop_thread("starter")
-        self._set_status("ready", f"● Ready on 127.0.0.1:{self.server_port}")
+        self._set_status("ready", f"● Ready on 127.0.0.1:{self.server_port}"
+                                  f" · ctx {self._server_ctx or '?'}")
         self.start_btn.setText("■ Stop server")
         self.start_btn.setObjectName("danger")
         self.start_btn.setStyleSheet("")
@@ -845,6 +909,7 @@ class MainWindow(QMainWindow):
         stop_process(self.process, getattr(self, "_log_file", None))
         self.process = None
         self._log_file = None
+        self._server_ctx = None
 
     def _set_status(self, kind, text):
         colors = {"stopped": "#888", "starting": "#c9a86a", "ready": "#6aca6a", "error": "#e06c6c"}
@@ -933,10 +998,13 @@ class MainWindow(QMainWindow):
 
         # Memory management: trim the oldest history so the prompt fits into
         # the model context (otherwise llama-server rejects long chats).
-        outgoing = self._trimmed_history(self.messages, self.ctx_spin.value())
+        ctx_tokens = self._effective_ctx()
+        outgoing = self._trimmed_history(self.messages, ctx_tokens)
 
-        # System prompt + optional RAG project context, as one system message
+        # System prompt + selected skills + optional RAG project context,
+        # as one system message (fitted to the context below)
         system_prompt = self.sys_prompt_edit.toPlainText().strip()
+        skills_block = skill_lib.build_prompt(self.dlg.selected_skills())
         rag_block = ""
         if self.rag_enabled.isChecked():
             try:
@@ -957,8 +1025,18 @@ class MainWindow(QMainWindow):
                     self._append_sys(f"📚 Using {len(snips)} context chunks from the project index.")
             else:
                 self._append_sys("RAG enabled but index is empty — press Analyze first.")
-        system_content = system_prompt + rag_block if system_prompt else rag_block.lstrip("\n")
-        if system_content.strip():
+        history_tokens = sum(len(m.get("content", "")) for m in outgoing) / 4
+        reserve = int(history_tokens + self._reply_budget() + 64)
+        budget_chars = max((ctx_tokens - reserve) * 4, 0)
+        system_content, trimmed = self._fit_system(
+            skills_block, system_prompt, rag_block, budget_chars)
+        if trimmed:
+            self._append_sys(
+                "⚠️ Context limit (" + str(ctx_tokens) + " tokens): trimmed "
+                + ", ".join(trimmed)
+                + f". Raise Context in Settings ▸ Server (now {self.ctx_spin.value()}) "
+                  "and restart the server to use everything.")
+        if system_content:
             outgoing = [{"role": "system", "content": system_content}] + outgoing
         self.chat_worker = ChatWorker(self.server_port, outgoing,
                                       self.temp_spin.value(), self.maxtok_spin.value())
@@ -987,6 +1065,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._stop_generating()
+        try:
+            self.dlg.close()
+        except Exception:
+            pass
         if self.dl_worker is not None:
             try:
                 self.dl_worker.stop()

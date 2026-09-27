@@ -20,12 +20,27 @@ QPushButton#ghost { background: #33343b; }
 QPushButton#ghost:hover { background: #41424b; }
 QSpinBox, QDoubleSpinBox { background: #26272e; border: 1px solid #3a3b42;
     border-radius: 6px; padding: 4px; }
+QComboBox { background: #26272e; border: 1px solid #3a3b42; border-radius: 6px;
+    padding: 5px 8px; min-height: 20px; }
+QComboBox:hover { border-color: #4a6cb4; }
+QComboBox::drop-down { border: none; width: 22px; }
+QComboBox QAbstractItemView { background: #26272e; border: 1px solid #3a3b42;
+    selection-background-color: #3d5a99; selection-color: white; padding: 4px; }
+QTabWidget::pane { border: 1px solid #3a3b42; border-radius: 8px; top: -1px;
+    background: #1e1f24; }
+QTabBar::tab { background: #26272e; color: #aab; padding: 8px 14px; margin-right: 2px;
+    border-top-left-radius: 8px; border-top-right-radius: 8px; }
+QTabBar::tab:selected { background: #3d5a99; color: white; font-weight: bold; }
+QTabBar::tab:hover:!selected { background: #41424b; }
+QDialog { background: #1e1f24; }
+QDialog QPushButton { min-width: 90px; }
 QSplitter::handle { background: #3a3b42; }
 QCheckBox { spacing: 6px; }
 QProgressBar { background: #26272e; border: 1px solid #3a3b42; border-radius: 6px;
     text-align: center; height: 14px; }
 QProgressBar::chunk { background: #3d5a99; border-radius: 4px; }
 QLabel#dim { color: #888; }
+QLabel#section { color: #c9a86a; font-weight: bold; letter-spacing: 1px; padding-top: 6px; }
 """
 
 BUBBLE_USER = ("<div style='text-align:right; margin:6px 0;'>"

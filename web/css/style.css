@@ -390,6 +390,43 @@ h1, h2, h3, h4 {
 .pipe h3 { font-size: 1.15rem; margin-bottom: 0.55rem; }
 .pipe p { font-size: 0.88rem; color: var(--ink-dim); }
 
+/* ---------- Skills ---------- */
+.skills-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.2rem;
+}
+.skill-card {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.3rem 1.4rem;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.skill-card:hover { border-color: var(--accent-dim); transform: translateY(-3px); }
+.skill-card h4 { font-size: 1.02rem; margin-bottom: 0.6rem; }
+.skill-card__icon { margin-right: 0.35rem; }
+.skill-card p {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.8;
+  color: var(--ink-dim);
+}
+.skill-card--accent {
+  border-color: var(--accent-dim);
+  background: var(--accent-soft);
+}
+.skills-note {
+  max-width: 760px;
+  margin: 2.2rem auto 0;
+  text-align: center;
+  color: var(--ink-dim);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+.skills-note strong { color: var(--ink); }
+.skills-showcase { max-width: 640px; margin: 2.6rem auto 0; }
+
 /* ---------- Architecture ---------- */
 .arch {
   display: grid;
@@ -567,6 +604,7 @@ html.js .reveal { opacity: 1; transform: none; transition: none; }
   .stat:nth-child(-n+2) { border-top: 0; }
   .stat:nth-child(even) { border-left: 1px solid var(--line); }
   .arch { grid-template-columns: 1fr; gap: 1.4rem; }
+  .skills-grid { grid-template-columns: repeat(2, 1fr); }
   .footer__inner { grid-template-columns: 1fr; gap: 2rem; }
 }
 
@@ -586,6 +624,7 @@ html.js .reveal { opacity: 1; transform: none; transition: none; }
     gap: 0.9rem;
   }
   .pipeline { grid-template-columns: 1fr; }
+  .skills-grid { grid-template-columns: 1fr; }
   .stats__grid { grid-template-columns: 1fr; }
   .stat:nth-child(even) { border-left: 0; }
   .stat:nth-child(n+2) { border-top: 1px solid var(--line); }

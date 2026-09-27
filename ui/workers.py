@@ -2,6 +2,7 @@
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -181,5 +182,24 @@ class ChatWorker(QThread):
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
             self.finished.emit(full)
+        except urllib.error.HTTPError as e:
+            # llama-server explains the problem in the body (e.g. "request (4482
+            # tokens) exceeds the available context size") — surface that text.
+            body = ""
+            try:
+                body = e.read().decode("utf-8", errors="replace").strip()
+            except Exception:
+                pass
+            detail = body
+            try:
+                err = json.loads(body).get("error")
+                if isinstance(err, dict):
+                    detail = str(err.get("message") or err)
+                elif err:
+                    detail = str(err)
+            except Exception:
+                pass
+            self.error.emit(f"HTTP {e.code} {e.reason}"
+                            + (f" — {detail[:400]}" if detail else ""))
         except Exception as e:
             self.error.emit(f"{type(e).__name__}: {e}")

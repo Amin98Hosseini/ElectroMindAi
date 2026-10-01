@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 
 import rag
 from core import chat_store
+from core import laya as laya_lib
 from core import skills as skill_lib
 from core.catalog import load_catalog
 from core.config import LOG_PATH, MODEL_DIR, SETTINGS_PATH, BASE_DIR
@@ -23,7 +24,8 @@ from core.llama import start_server_process, stop_process, kill_all_servers, ser
 from core.http_utils import port_open
 from ui.settings_dialog import SettingsDialog
 from ui.theme import DARK, BUBBLE_USER, BUBBLE_AI, BUBBLE_THINK, bubble
-from ui.workers import ServerStarter, IndexWorker, DownloadWorker, ChatWorker
+from ui.workers import (ServerStarter, IndexWorker, DownloadWorker, ChatWorker,
+                        ContextWorker)
 
 APP_ICON = BASE_DIR / "assets" / "icon.ico"
 APP_NAME = "ElectroMind"
@@ -56,6 +58,8 @@ class MainWindow(QMainWindow):
         self._suppress_chat_select = False
         self._loading = False          # True while settings.json is being restored
         self._server_ctx = None        # context the running server was started with
+        self.laya_scorer = laya_lib.ContextScorer()  # lazy: loads on first filtered question
+        self.context_worker = None     # active ContextWorker (RAG + Laya filtering)
 
         self._build_ui()
         self._refresh_models()
@@ -350,6 +354,13 @@ class MainWindow(QMainWindow):
             self.rag_mode.setCurrentIndex(int(data.get("rag_mode", 0)))
             self.rag_topk.setValue(int(data.get("rag_topk", 4)))
             self.rag_enabled.setChecked(bool(data.get("rag_enabled", True)))
+            self.dlg.laya_enabled.setChecked(bool(data.get("laya_enabled", True)))
+            self.dlg.laya_initial_k.setValue(int(data.get("laya_initial_k", 10)))
+            self.dlg.laya_final_k.setValue(int(data.get("laya_final_k", 4)))
+            self.dlg.laya_threshold.setValue(float(data.get("laya_threshold", 0.70)))
+            model = str(data.get("laya_model", "auto"))
+            if model in laya_lib.MODEL_CHOICES:
+                self.dlg.laya_model.setCurrentIndex(laya_lib.MODEL_CHOICES.index(model))
             self.dlg.set_skills(list(data.get("skills", [])))
             d = data.get("project_dir")
             if d and Path(d).is_dir():
@@ -379,6 +390,11 @@ class MainWindow(QMainWindow):
                 "rag_mode": self.rag_mode.currentIndex(),
                 "rag_topk": self.rag_topk.value(),
                 "rag_enabled": self.rag_enabled.isChecked(),
+                "laya_enabled": self.dlg.laya_enabled.isChecked(),
+                "laya_initial_k": self.dlg.laya_initial_k.value(),
+                "laya_final_k": self.dlg.laya_final_k.value(),
+                "laya_threshold": self.dlg.laya_threshold.value(),
+                "laya_model": laya_lib.MODEL_CHOICES[self.dlg.laya_model.currentIndex()],
                 "skills": self.dlg.selected_skills(),
             }
             SETTINGS_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2),
@@ -799,6 +815,8 @@ class MainWindow(QMainWindow):
         self._finish_worker()
 
     def _stop_generating(self):
+        if getattr(self, "context_worker", None) is not None:
+            self.context_worker.stop()
         if getattr(self, "chat_worker", None) is not None:
             self.chat_worker.stop()
         self.stop_btn.setEnabled(False)
@@ -931,9 +949,11 @@ class MainWindow(QMainWindow):
                 and port_open(self.server_port))
 
     def _update_send_state(self):
-        ok = self._server_ready() and self.chat_worker is None
+        ok = (self._server_ready() and self.chat_worker is None
+              and self.context_worker is None)
         self.send_btn.setEnabled(ok)
-        self.input_box.setEnabled(self.chat_worker is None)
+        self.input_box.setEnabled(self.chat_worker is None
+                                  and self.context_worker is None)
 
     @staticmethod
     def _trimmed_history(messages, ctx_tokens, reserve_tokens=1024):
@@ -970,7 +990,7 @@ class MainWindow(QMainWindow):
 
     def _send(self):
         text = self.input_box.text().strip()
-        if not text or self.chat_worker is not None:
+        if not text or self.chat_worker is not None or self.context_worker is not None:
             return
         if not self._server_ready():
             QMessageBox.warning(self, "No server", "Start the server first.")
@@ -996,35 +1016,73 @@ class MainWindow(QMainWindow):
         self._ai_div_started = False
         self._pending_sources = []
 
+        # RAG context (with optional Laya relevance filtering) is built in a
+        # background worker so neither retrieval nor Laya inference blocks the
+        # GUI; _start_chat() runs once the worker reports the final contexts.
+        if self.rag_enabled.isChecked() and self._index_has_chunks():
+            self.context_worker = ContextWorker(
+                text, self.rag_topk.value(),
+                laya_enabled=self.dlg.laya_enabled.isChecked(),
+                laya_initial_k=self.dlg.laya_initial_k.value(),
+                laya_final_k=self.dlg.laya_final_k.value(),
+                laya_threshold=self.dlg.laya_threshold.value(),
+                laya_model=laya_lib.MODEL_CHOICES[self.dlg.laya_model.currentIndex()],
+                scorer=self.laya_scorer)
+            self.context_worker.done.connect(self._on_context_ready)
+            self.context_worker.start()
+            self.stop_btn.setEnabled(True)
+            self._update_send_state()
+            return
+        self._start_chat(text)
+
+    def _index_has_chunks(self):
+        try:
+            return rag.index_stats().get("chunks", 0) > 0
+        except Exception:
+            return False
+
+    def _on_context_ready(self, info):
+        """ContextWorker finished: build the RAG block from the selected contexts."""
+        self._drop_thread("context_worker")
+        if self.chat_worker is not None:
+            return  # a new send superseded this one
+        text = info["query"]
+        snips = info["snippets"]
+        rag_block = ""
+        if info.get("retrieve_error"):
+            self._append_sys(f"RAG retrieval failed: {info['retrieve_error']}")
+        elif not snips:
+            self._append_sys("RAG enabled but nothing relevant found in the index.")
+        if snips:
+            ctx = rag.build_context(snips)
+            rag_block = ("\n\nPROJECT CONTEXT (relevant files from the indexed project "
+                         "— ground your answer in it and cite file paths):\n" + ctx)
+            self._pending_sources = [s["path"] for s in snips]
+            # diagnostics: plain retrieval vs Laya-filtered selection
+            if info.get("laya_used"):
+                self._append_sys(
+                    f"🧠 Laya evaluated {info['retrieved']} contexts, "
+                    f"selected {info['selected']} (threshold {self.dlg.laya_threshold.value():.2f}).")
+                for score, path in info.get("scores", [])[:8]:
+                    self._append_sys(f"   {score:.2f}  {path}")
+            else:
+                note = "plain ChromaDB ranking"
+                if info.get("laya_error"):
+                    note += f" — {info['laya_error']}"
+                self._append_sys(f"📚 Using {info['selected']} context chunks ({note}).")
+        self._start_chat(text, rag_block)
+
+    def _start_chat(self, text, rag_block=""):
+        """Assemble the system message and start the ChatWorker streaming."""
         # Memory management: trim the oldest history so the prompt fits into
         # the model context (otherwise llama-server rejects long chats).
         ctx_tokens = self._effective_ctx()
         outgoing = self._trimmed_history(self.messages, ctx_tokens)
 
-        # System prompt + selected skills + optional RAG project context,
-        # as one system message (fitted to the context below)
+        # System prompt + selected skills + RAG project context (already
+        # Laya-filtered), as one system message (fitted to the context below)
         system_prompt = self.sys_prompt_edit.toPlainText().strip()
         skills_block = skill_lib.build_prompt(self.dlg.selected_skills())
-        rag_block = ""
-        if self.rag_enabled.isChecked():
-            try:
-                st = rag.index_stats()
-            except Exception:
-                st = {"chunks": 0}
-            if st.get("chunks", 0) > 0:
-                try:
-                    snips = rag.retrieve(text, self.rag_topk.value())
-                except Exception as e:
-                    self._append_sys(f"RAG retrieval failed: {e}")
-                    snips = []
-                if snips:
-                    ctx = rag.build_context(snips)
-                    rag_block = ("\n\nPROJECT CONTEXT (relevant files from the indexed project "
-                                 "— ground your answer in it and cite file paths):\n" + ctx)
-                    self._pending_sources = [s["path"] for s in snips]
-                    self._append_sys(f"📚 Using {len(snips)} context chunks from the project index.")
-            else:
-                self._append_sys("RAG enabled but index is empty — press Analyze first.")
         history_tokens = sum(len(m.get("content", "")) for m in outgoing) / 4
         reserve = int(history_tokens + self._reply_budget() + 64)
         budget_chars = max((ctx_tokens - reserve) * 4, 0)
@@ -1065,6 +1123,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._stop_generating()
+        if getattr(self, "context_worker", None) is not None:
+            self.context_worker.stop()
         try:
             self.dlg.close()
         except Exception:

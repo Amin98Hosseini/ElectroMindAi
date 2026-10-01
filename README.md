@@ -34,6 +34,9 @@ ElectroMind bundles a [llama.cpp](https://github.com/ggml-org/llama.cpp) inferen
   - **🎯 Accurate** — MiniLM embeddings, better semantic matching (one-time model download)
 - **Incremental indexing** — only new/changed files are re-processed
 - Answers cite the **source files** used as context
+- **🧠 Laya Context Intelligence** (optional) — a local decision model re-ranks the retrieved
+  chunks by relevance to your question before the LLM sees them — see
+  [Laya Context Intelligence](#-laya-context-intelligence-optional)
 
 ---
 
@@ -161,6 +164,70 @@ Act as a senior schematic designer ...
 All fields except the name/instructions are optional; files are re-read each time the Skills tab
 opens, so no restart is needed. If `./skills` is missing or empty, the app falls back to the
 built-in skill set compiled into `core/skills.py`.
+
+---
+
+## 🧠 Laya Context Intelligence (optional)
+
+[Laya](https://huggingface.co/convaiinnovations/laya) is a small (322–421 M parameter), local,
+non-autoregressive **decision** model — it never generates answers. ElectroMind uses it purely as
+a **context-selection layer**: for every chunk ChromaDB retrieves, Laya answers one typed question
+— *"is this context relevant to answering the user's question?"* — and returns a calibrated
+relevance probability in a single forward pass (~30–400 ms). It is **not** fact-checking: a high
+score means *topically relevant*, nothing more.
+
+### Where it sits
+
+```text
+User question
+      │
+      ▼
+ChromaDB retrieval        ← high recall: fetches MORE candidates than needed
+      │                      (Initial candidates, default 10)
+      ▼
+Laya decision model       ← relevance score per candidate (type "noul")
+      │
+      ▼
+Context filter / ranker   ← drop below Relevance threshold,
+      │                      sort by score, keep Final contexts (default 4)
+      ▼
+Existing RAG context builder → llama.cpp LLM → cited answer
+```
+
+### Configuration (Settings ▸ Project / RAG)
+
+| Setting | Default | Meaning |
+|---|---|---|
+| Enable Laya context filtering | on | master switch; off = plain ChromaDB ranking |
+| Initial candidates | 10 | how many chunks ChromaDB fetches before re-ranking |
+| Final contexts | 4 | contexts kept after filtering (≤ *Chunks / question*) |
+| Relevance threshold | 0.70 | candidates below this probability are dropped (a configurable default, not a tuned optimum) |
+| Model | auto | `auto` routes English → `laya`, everything else (Persian, mixed…) → `laya-multilingual` (100+ languages); or force a checkpoint |
+
+All values persist in `settings.json` (`laya_enabled`, `laya_initial_k`, `laya_final_k`,
+`laya_threshold`, `laya_model`).
+
+### Installation
+
+```bash
+pip install laya        # Python 3.10+; downloads a ~650–800 MB checkpoint on first use
+```
+
+The package is **optional** and commented out in `requirements.txt` — without it the app runs
+normally and the Skills-tab-style status line in the dialog shows what to install.
+
+### Fallback behaviour (by design)
+
+- **Laya disabled** → `ChromaDB → context builder → LLM` exactly as before
+- **Laya not installed / fails to load / inference error** → the chat continues with the plain
+  ChromaDB ranking and a note in the chat log; the app never crashes
+- **Everything scores below the threshold** → the highest-scoring candidates are still sent
+  (up to Final contexts) — an empty context is never returned while the index found something
+- The model loads **once per session**, lazily, on the first filtered question, inside a
+  background thread (the GUI never blocks)
+
+After each question the chat log shows the diagnostics, e.g. `🧠 Laya evaluated 10 contexts,
+selected 3 (threshold 0.70)` followed by per-file scores like `0.94  src/foo.py`.
 
 ---
 

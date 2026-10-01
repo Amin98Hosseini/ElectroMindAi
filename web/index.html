@@ -45,7 +45,7 @@
       <div class="circuit-line circuit-line--2"></div>
       <div class="circuit-line circuit-line--3"></div>
     </div>
-    <p class="hero__eyebrow">100% Local &nbsp;·&nbsp; RAG &nbsp;·&nbsp; Expert Skills &nbsp;·&nbsp; GGUF via llama.cpp &nbsp;·&nbsp; Python 3.10+</p>
+    <p class="hero__eyebrow">100% Local &nbsp;·&nbsp; RAG &nbsp;·&nbsp; Laya Context Intelligence &nbsp;·&nbsp; Expert Skills &nbsp;·&nbsp; GGUF via llama.cpp</p>
     <h1>The Local Mind<br>for Your Circuits</h1>
     <p class="hero__sub">
       ElectroMind AI bundles a llama.cpp inference server, a PyQt6 chat GUI and a
@@ -167,6 +167,34 @@ temp     0.7    max tokens  -1
           </div>
         </div>
       </div>
+
+      <div class="feature-block feature-block--flip reveal">
+        <div class="feature-block__text">
+          <span class="tag">Laya Context Intelligence</span>
+          <h3>A decision model filters your context</h3>
+          <p>ChromaDB retrieves <em>more</em> candidates than needed — then <strong>Laya</strong>, a small local
+             decision model, answers one question per chunk: <em>"is this relevant to the user's question?"</em>
+             Sub-threshold chunks are dropped, the rest are re-ranked, and only the best few reach the LLM.
+             One forward pass per chunk, ~100% local, and it never generates a word — it only decides.</p>
+          <ul class="ticks">
+            <li>Multilingual: auto-routes English, Persian and mixed-language questions</li>
+            <li>Optional — falls back to plain ChromaDB ranking when not installed</li>
+            <li>Relevance ranking, not fact-checking: a high score means <em>topically relevant</em></li>
+          </ul>
+        </div>
+        <div class="feature-block__code">
+          <div class="code-card">
+            <div class="code-card__bar"><i></i><i></i><i></i><span>chat · context selection</span></div>
+            <pre><code>ChromaDB: 10 candidate chunks
+<span class="k">🧠 Laya evaluated 10 contexts, selected 3</span>
+<span class="ok">0.94</span>  hardware/power/buck.pdf
+<span class="ok">0.89</span>  firmware/stm32f103.c
+<span class="ok">0.83</span>  docs/psu-design.md
+0.12  unrelated.md   <span class="c">← dropped</span>
+<span class="c">→ only the top 3 go to llama.cpp</span></code></pre>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -215,7 +243,9 @@ temp     0.7    max tokens  -1
       <p>Context-aware by design: ElectroMind estimates the prompt size of the ticked skills and
          <strong>auto-sizes the model's context window</strong> so everything fits. If a request would
          still overflow, the system message is trimmed — project context first, then skills, then
-         prompt — and the app tells you exactly what was cut.</p>
+         prompt — and the app tells you exactly what was cut. With <strong>Laya Context
+         Intelligence</strong> enabled, the project context itself is re-ranked by a local decision
+         model before it reaches the LLM.</p>
     </div>
 
     <div class="skills-showcase reveal">
@@ -404,6 +434,15 @@ FIRMWARE &amp; MICROCONTROLLERS
         <p>Yes — that's the intended combo: your indexed project files provide the <em>facts</em>, the skills
            shape the <em>expertise</em> of the answer. The context auto-sizer accounts for both, so adding
            skills won't silently crowd out your project context.</p>
+      </details>
+      <details class="faq reveal">
+        <summary>What is Laya Context Intelligence?<span class="faq__chev">⌄</span></summary>
+        <p>An optional extra layer: after ChromaDB retrieves candidate chunks, a small local decision model
+           (Laya, 322–421 M parameters) scores each chunk's <em>relevance</em> to your question in a single
+           forward pass. Irrelevant chunks are dropped before the LLM ever sees them, so answers lean on
+           fewer, better files. It's relevance selection, not fact-checking — and if Laya isn't installed,
+           ElectroMind simply uses the plain ChromaDB ranking. Enable it in Settings ▸ Project / RAG
+           (<code>pip install laya</code>, Python 3.10+).</p>
       </details>
     </div>
   </section>

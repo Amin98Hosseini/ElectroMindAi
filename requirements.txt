@@ -12,3 +12,8 @@ onnxruntime>=1.17
 # Document text extraction (PDF schematics/datasheets, DOCX docs)
 pypdf>=4.0
 python-docx>=1.1
+
+# OPTIONAL — Laya Context Intelligence (relevance filtering of RAG results).
+# The app works fine without it (falls back to plain ChromaDB ranking).
+# Python 3.10+; downloads its checkpoint (~650-800 MB) on first use.
+# laya>=0.3.20

@@ -10,6 +10,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 import rag
 from core.config import LOG_PATH
 from core.http_utils import http_open, port_open
+from core import laya as laya_lib
 
 
 class ServerStarter(QThread):
@@ -113,6 +114,81 @@ class DownloadWorker(QThread):
             self.done.emit(str(self.dest))
         except Exception as e:
             self.error.emit(f"{type(e).__name__}: {e}")
+
+
+class ContextWorker(QThread):
+    """RAG retrieval + optional Laya context filtering, off the GUI thread.
+
+    Pipeline: ChromaDB high-recall candidates -> (Laya) relevance score per
+    candidate -> threshold/sort/cap -> selected contexts. Emits a diagnostics
+    dict either way; Laya failures degrade to the plain ChromaDB ranking.
+    """
+    done = pyqtSignal(dict)
+
+    def __init__(self, query, top_k, laya_enabled=False, laya_initial_k=10,
+                 laya_final_k=4, laya_threshold=0.70, laya_model="auto", scorer=None):
+        super().__init__()
+        self.query = query
+        self.top_k = int(top_k)          # contexts requested by the user (RAG top-k)
+        self.laya_enabled = bool(laya_enabled)
+        self.laya_initial_k = int(laya_initial_k)
+        self.laya_final_k = int(laya_final_k)
+        self.laya_threshold = float(laya_threshold)
+        self.laya_model = laya_model
+        self.scorer = scorer
+        self._stop = False
+
+    def stop(self):
+        self._stop = True
+
+    def run(self):
+        final_k = self.top_k if not self.laya_enabled else max(1, min(self.laya_final_k, self.top_k))
+        info = {
+            "query": self.query,
+            "laya_enabled": self.laya_enabled,
+            "retrieved": 0,
+            "selected": 0,
+            "laya_used": False,
+            "laya_error": None,
+            "retrieve_error": None,
+            "scores": [],           # [(score, path)] for diagnostics
+            "snippets": [],
+        }
+        try:
+            # Step 1 — high-recall retrieval: more candidates when Laya will re-rank
+            n = self.laya_initial_k if self.laya_enabled else self.top_k
+            candidates = rag.retrieve(self.query, n)
+            info["retrieved"] = len(candidates)
+            if not candidates:
+                self.done.emit(info)
+                return
+            if self._stop:
+                return
+
+            # Step 2 — Laya relevance scoring (falls back silently on failure)
+            if self.laya_enabled:
+                try:
+                    scores = self.scorer.score_many(self.query,
+                                                    [c["text"] for c in candidates],
+                                                    model=self.laya_model)
+                    picked = laya_lib.filter_ranked(self.query, candidates, scores,
+                                                    threshold=self.laya_threshold,
+                                                    final_top_k=final_k)
+                    ranked = sorted(zip(scores, candidates),
+                                    key=lambda sc_c: sc_c[0], reverse=True)
+                    info.update(laya_used=True,
+                                scores=[(round(float(s), 3), c["path"]) for s, c in ranked])
+                except laya_lib.LayaUnavailable as e:
+                    info["laya_error"] = str(e)
+            if not info["laya_used"]:
+                # Laya disabled or failed: plain ChromaDB ranking, cap at final_k
+                picked = candidates[:final_k]
+
+            info["selected"] = len(picked)
+            info["snippets"] = picked
+        except Exception as e:
+            info["retrieve_error"] = f"{type(e).__name__}: {e}"
+        self.done.emit(info)
 
 
 class ChatWorker(QThread):

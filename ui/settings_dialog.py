@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core import skills as skill_lib
+from core import laya as laya_lib
 from core.config import SKILLS_DIR
 from core.prompts import DEFAULT_SYSTEM_PROMPT
 
@@ -126,10 +127,55 @@ class SettingsDialog(QDialog):
         self.rag_topk.setToolTip("How many project chunks are injected per question.")
         form.addRow("Chunks / question", self.rag_topk)
         v.addWidget(box)
-
         self.rag_enabled = QCheckBox("Use indexed project context in chat")
         self.rag_enabled.setChecked(True)
         v.addWidget(self.rag_enabled)
+
+        # ---- Laya Context Intelligence (relevance filtering of RAG results)
+        laya_box = QGroupBox("🧠 Laya Context Intelligence (relevance filtering)")
+        lv = QVBoxLayout(laya_box)
+        self.laya_enabled = QCheckBox("Enable Laya context filtering")
+        self.laya_enabled.setChecked(True)
+        self.laya_enabled.setToolTip(
+            "A local decision model re-ranks the retrieved chunks by relevance "
+            "to your question before they are sent to the LLM.\n"
+            "Needs 'pip install laya' (Python 3.10+); falls back to plain "
+            "ChromaDB ranking when unavailable.")
+        lv.addWidget(self.laya_enabled)
+        lform = QFormLayout()
+        self.laya_initial_k = QSpinBox()
+        self.laya_initial_k.setRange(2, 30)
+        self.laya_initial_k.setValue(10)
+        self.laya_initial_k.setPrefix("top-")
+        self.laya_initial_k.setToolTip("Candidates fetched from ChromaDB before Laya re-ranks them.")
+        self.laya_final_k = QSpinBox()
+        self.laya_final_k.setRange(1, 10)
+        self.laya_final_k.setValue(4)
+        self.laya_final_k.setPrefix("top-")
+        self.laya_final_k.setToolTip("Contexts kept after filtering — at most 'Chunks / question' above.")
+        self.laya_threshold = QDoubleSpinBox()
+        self.laya_threshold.setRange(0.0, 1.0)
+        self.laya_threshold.setSingleStep(0.05)
+        self.laya_threshold.setValue(0.70)
+        self.laya_threshold.setToolTip(
+            "Contexts scoring below this relevance probability are dropped\n"
+            "(the best few are still kept as a fallback — never an empty context).")
+        self.laya_model = QComboBox()
+        self.laya_model.addItems(["auto (detect language)", "english", "multilingual"])
+        self.laya_model.setToolTip(
+            "auto: English questions use the English checkpoint, everything else "
+            "(e.g. Persian, mixed) the multilingual one.")
+        lform.addRow("Initial candidates", self.laya_initial_k)
+        lform.addRow("Final contexts", self.laya_final_k)
+        lform.addRow("Relevance threshold", self.laya_threshold)
+        lform.addRow("Model", self.laya_model)
+        lv.addLayout(lform)
+        self.laya_status = QLabel("")
+        self.laya_status.setObjectName("dim")
+        self.laya_status.setWordWrap(True)
+        lv.addWidget(self.laya_status)
+        v.addWidget(laya_box)
+        self._update_laya_status()
 
         idx = QGroupBox("Index")
         iv = QVBoxLayout(idx)
@@ -353,6 +399,17 @@ class SettingsDialog(QDialog):
         return w
 
     # ---------------------------------------------------------- wiring
+    def _update_laya_status(self):
+        """Small availability hint under the Laya controls."""
+        if laya_lib._import_router() is None:
+            self.laya_status.setText("Status: laya package not installed — filtering is "
+                                     "off and plain ChromaDB ranking is used. "
+                                     "Install with: pip install laya")
+        else:
+            state = "loaded" if self.main.laya_scorer.loaded else "ready (loads on first use)"
+            err = f" Last error: {self.main.laya_scorer.error}" if self.main.laya_scorer.error else ""
+            self.laya_status.setText(f"Status: available — {state}.{err}")
+
     def _connect(self):
         save = self.main._save_settings
         for w in (self.port_spin, self.ctx_spin, self.ngl_spin,
@@ -361,6 +418,15 @@ class SettingsDialog(QDialog):
         self.temp_spin.valueChanged.connect(save)
         self.rag_mode.currentIndexChanged.connect(save)
         self.rag_enabled.stateChanged.connect(save)
+        for w in (self.laya_initial_k, self.laya_final_k, self.laya_threshold):
+            w.valueChanged.connect(save)
+        self.laya_enabled.stateChanged.connect(save)
+        self.laya_model.currentIndexChanged.connect(save)
+        # grey the Laya controls out while filtering is disabled
+        for w in (self.laya_initial_k, self.laya_final_k,
+                  self.laya_threshold, self.laya_model, self.laya_status):
+            self.laya_enabled.toggled.connect(w.setEnabled)
+            w.setEnabled(self.laya_enabled.isChecked())
         # retrieval options also change how much has to fit into the context
         self.rag_enabled.stateChanged.connect(self.main._auto_context)
         self.rag_topk.valueChanged.connect(self.main._auto_context)
